@@ -1,0 +1,162 @@
+Loopings and Dispenser
+#!/bin/bash
+
+balance=50000
+tries=0
+limit=1000
+is_local="no"   # simplified: assume other bank
+
+# --- PIN CHECK (length + tries only) ---
+while [ $tries -lt 3 ]; do
+    echo "WELCOME TO THE ATM"
+    read -p "Enter your 6-digit PIN: " pin
+
+    if [ ${#pin} -eq 6 ]; then
+        echo "PIN accepted."
+        break
+    else
+        echo "Invalid PIN length."
+        tries=$((tries + 1))
+    fi
+
+    if [ $tries -eq 3 ]; then
+        echo "Too many attempts. Card blocked."
+        exit
+    fi
+done
+
+# Function to calculate and dispense bills
+dispense_bills() {
+amount=$1
+denominations=(1000 500 100)
+bills=()
+
+for denom in "${denominations[@]}"; do
+    bill_count=$((amount / denom))
+    bills+=($bill_count)
+    amount=$((amount % denom))
+done
+
+echo "Dispensing cash:"
+echo "--------------------"
+for i in "${!denominations[@]}"; do
+    if [ ${bills[$i]} -gt 0 ]; then
+        echo "PHP ${denominations[$i]}: ${bills[$i]} bill(s)"
+    fi
+done
+}
+
+# Function to check account balance (ATM-style)
+check_balance() {
+echo ""
+echo "--- BALANCE INQUIRY ---"
+
+if [ "$is_local" == "no" ]; then
+    balance=$((balance - 5))
+    echo "Account Type     : Other Bank"
+    echo "Service Fee      : PHP 5.00"
+else
+    echo "Account Type     : Local Bank"
+fi
+
+echo "Available Balance: PHP $balance.00"
+echo "Current Balance  : PHP $balance.00"
+echo "---------------------------"
+}
+
+# Function to log transaction to file
+log_transaction() {
+amount=$1
+timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+echo "Withdrawn PHP $amount on $timestamp" >> transactions.log
+}
+
+# --- MAIN MENU LOOP ---
+while true; do
+echo ""
+echo "ATM MENU"
+echo "1. Withdraw Money"
+echo "2. Balance Inquiry"
+echo "3. Exit"
+read -p "Please select an option: " choice
+
+case $choice in
+1) # Withdraw Money
+    read -p "Enter amount to withdraw (multiple of 100): " amount
+
+    if [[ ! "$amount" =~ ^[0-9]+$ ]] || [ $amount -le 0 ]; then
+        echo "Invalid amount."
+        continue
+    fi
+
+    if [ $amount -gt $balance ]; then
+        echo "Insufficient balance."
+        continue
+    fi
+
+    if [ $amount -gt $limit ]; then
+        echo "Withdrawal limit is PHP $limit."
+        continue
+    fi
+
+    if [ $((amount % 100)) -ne 0 ]; then
+        echo "Invalid amount. Bills available are 100, 500, and 1000."
+        continue
+    fi
+
+    dispense_bills $amount
+    balance=$((balance - amount))
+
+    if [ "$is_local" == "no" ]; then
+        balance=$((balance - 18))
+        echo "Non-local withdrawal fee: PHP 18.00"
+    fi
+
+    log_transaction $amount
+    echo "Transaction successful."
+    ;;
+
+2) # Check Balance
+    check_balance
+    ;;
+
+3) # Exit
+    echo "Thank you for using the ATM!"
+    break
+    ;;
+
+*) # Invalid option
+    echo "Invalid choice. Please select again."
+    ;;
+esac
+done
+--------
+Replace your hard-coded line:
+
+is_local="no"
+
+
+WITH these lines (inside the PIN check, after length == 6):
+
+# Determine account type based on PIN pattern
+if [[ $pin == S*# ]]; then
+    is_local="yes"
+else
+    is_local="no"
+fi
+-----------
+2. CORRECT WITHDRAWAL LIMITS (₱20,000 vs ₱10,000)
+
+REMOVE / IGNORE this old line:
+
+limit=1000
+
+
+ADD these lines right AFTER account type is determined:
+
+# Set withdrawal limit based on account type
+if [ "$is_local" == "yes" ]; then
+    limit=20000
+else
+    limit=10000
+fi
